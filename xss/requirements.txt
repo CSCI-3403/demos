@@ -1,0 +1,4 @@
+click
+flask
+flask-wtf
+flask-login

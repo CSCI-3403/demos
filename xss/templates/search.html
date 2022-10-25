@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<a class="nostyle" href="/"><h2><i class="fas fa-chevron-left"></i> Back</h2></a>
+
+<form action="search">
+    <input type="text" name="query" value="{{query}}">
+    <input type="submit" value="Search">
+</form>
+
+{% if documents %}
+<h1>Search results for: {{query|safe}}</h1>
+
+<div class="container horizontal wrap">
+  {% for (i, document) in documents %}
+  <a class="nostyle" href="document/{{i}}">
+    <div class="document-link">
+      <b>{{ document.owner }}</b><br/>
+      <span>{{ document.contents[:30] }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% else %}
+<h1>No search results for: {{query|safe}}</h1>
+{% endif %}
+
+{% endblock %}

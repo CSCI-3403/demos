@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a class="nostyle" href="/"><h2><i class="fas fa-chevron-left"></i> Back</h2></a>
+
+<h2>Created by: {{ document.owner }}</h2>
+<div class="document-link">{{ document.contents | safe }}</div>
+
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a class="nostyle" href="/"><h2><i class="fas fa-chevron-left"></i> Back</h2></a>
+
+<h1>New Document</h1>
+
+<form action="/create" method="POST" id="editor">
+    {% if csrf_enabled %}
+    {{ form.csrf_token }}
+    {% endif %}
+    <dt><h2>{{ form.content.label }}</h2></dt>
+    <dd>{{ form.content }}
+    {% if form.content.errors %}
+        <ul class="errors">
+            {% for error in form.content.errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    </dd>
+    {% if form.errors['csrf_token'] %}
+        <ul class="errors">
+            {% for error in form.errors['csrf_token'] %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</form>
+
+<button type="submit" form="editor" value="Save">
+    <i class="fas fa-save"></i> Save
+</button>
+
+<div>
+</div>
+{% endblock %}
