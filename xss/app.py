@@ -1,10 +1,11 @@
 from dataclasses import dataclass
+from glob import escape
 import logging
 import random
 import sys
 from typing import Any, Dict, Optional
 import click
-from flask import Flask, redirect, request, render_template, session, url_for
+from flask import Flask, make_response, redirect, request, render_template, session, url_for
 
 from flask_wtf import FlaskForm # type: ignore
 from flask_login import current_user, login_required, login_user, LoginManager, logout_user, UserMixin # type: ignore
@@ -45,6 +46,11 @@ class User(UserMixin):
     def get_id(self) -> str:
         return self.username
 
+class CSRFForm(FlaskForm):
+    def __init__(self):
+        self.Meta.csrf = not csrf_enabled()
+        super().__init__()
+
 users = {
     "admin": User("admin", "Sw0rdf1sh!")
 }
@@ -52,8 +58,20 @@ users = {
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+def xss_enabled():
+    return session.get("xss", False)
+
 def csrf_enabled():
-    return True
+    return session.get("csrf", False)
+
+def sqli_enabled():
+    return session.get("sqli", False)
+
+def escape_xss(html: str) -> str:
+    if xss_enabled():
+        return html
+    else:
+        return html.replace("<", "&lt;").replace(">", "&gt;")
 
 @login_manager.user_loader
 def load_user(username: str) -> Optional[User]:
@@ -67,7 +85,9 @@ def set_id():
 @app.context_processor
 def inject_debug_info() -> Dict[str, Any]:
     return {
+        'xss_enabled': xss_enabled(),
         'csrf_enabled': csrf_enabled(),
+        'sqli_enabled': sqli_enabled(),
     }
 
 @app.route('/')
@@ -80,31 +100,29 @@ def index():
 def search():
     query = request.args.get('query')
     results = [d for d in enumerate(documents) if query.lower() in d[1].contents.lower()]
-    return render_template('search.html',  user=current_user, query=query, documents=results)
+    resp = make_response(render_template('search.html',  user=current_user, query=query, documents=results))
+
+    if not xss_enabled():
+        resp.headers["Content-Security-Policy"] = "script-src 'self' kit.fontawesome.com"
+
+    return resp
 
 @app.route('/document/<id>')
 @login_required
 def document(id):
-    return render_template('document.html', user=current_user, document=documents[int(id)])
+    return render_template('document.html', user=current_user, document=escape_xss(documents[int(id)]))
 
-class CreateForm(FlaskForm):
+class CreateForm(CSRFForm):
     content = StringField('Content', widget=TextArea(), validators=[DataRequired(), Length(max=2048)])
-
-class NoCSRFCreateForm(CreateForm):
-    class Meta:
-        csrf = False
 
 @app.route('/create', methods=['GET', 'POST'])
 @login_required
 def create():
-    if csrf_enabled():
-        form = CreateForm()
-    else:
-        form = NoCSRFCreateForm()
+    form = CreateForm()
 
     if form.validate_on_submit():
         documents.append(Document(owner=current_user.username, contents=form.content.data))
-        return redirect(url_for('index'))  
+        return redirect(url_for('index'))
 
     return render_template('create.html', user=current_user, form=form)
 
@@ -117,20 +135,13 @@ def get_user(username, password):
     else:
         return None
 
-class LoginForm(FlaskForm):
+class LoginForm(CSRFForm):
     username = StringField('Username', [Length(min=1)])
     password = PasswordField('Password', [Length(min=1)])
 
-class NoCSRFLoginForm(LoginForm):
-    class Meta:
-        csrf = False
-
 @app.route('/login', methods=['GET', 'POST'])
 def login() -> Response:
-    if csrf_enabled():
-        form = LoginForm()
-    else:
-        form = NoCSRFLoginForm()
+    form = LoginForm()
 
     if form.validate_on_submit():
         user = get_user(form.username.data, form.password.data)
@@ -145,16 +156,27 @@ def login() -> Response:
         login_user(user)
 
         next = request.args.get('next')
-        return redirect(next or url_for('index'))
+        if next and request.host in next:
+            return redirect(next)
+        return redirect(url_for('index'))
 
     return render_template('login.html', form=form)
 
-@app.route('/csrf', methods=['POST'])
+@app.route('/vulns', methods=['POST'])
 def csrf() -> Response:
-    if 'enabled' in request.form and 'no_csrf' in session:
-        del session['no_csrf']
-    else:
-        session['no_csrf'] = True
+    print("Vulns called")
+    print(request.form)
+    for vuln in ["xss", "csrf", "sqli"]:
+        print(vuln)
+        if vuln in request.form:
+            print("Enabled" + vuln)
+            session[vuln] = True
+        elif vuln in session:
+            print("Disabled" + vuln)
+            del session[vuln]
+
+    if request.host in request.referrer:
+        return redirect(request.referrer)
 
     return redirect(url_for('index'))
 

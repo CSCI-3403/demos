@@ -5,11 +5,11 @@
 {% block content %}
 
 <form action="/login" method="POST" id="editor">
-    {% if csrf_enabled %}
+    {% if not csrf_enabled %}
     {{ form.csrf_token }}
     {% endif %}
-    <dt><h1>{{ form.username.label }}</h1></dt>
-    <dd>{{ form.username }}
+    <h1>{{ form.username.label }}</h1>
+    {{ form.username }}
     {% if form.username.errors %}
         <ul class="errors">
             {% for error in form.username.errors %}
@@ -17,9 +17,8 @@
             {% endfor %}
         </ul>
     {% endif %}
-    </dd>
-    <dt><h1>{{ form.password.label }}</h1></dt>
-    <dd>{{ form.password }}
+    <h1>{{ form.password.label }}</h1>
+    {{ form.password }}
     {% if form.password.errors %}
         <ul class="errors">
             {% for error in form.password.errors %}
@@ -27,7 +26,6 @@
             {% endfor %}
         </ul>
     {% endif %}
-    </dd>
     {% if form.errors['csrf_token'] %}
         <ul class="errors">
             {% for error in form.errors['csrf_token'] %}

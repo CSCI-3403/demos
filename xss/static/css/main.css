@@ -11,15 +11,7 @@ body {
 main {
     padding-top: 32px;
     margin: 0 auto;
-    width: 600px;
-}
-
-.csrf {
-    padding: 8px;
-    margin: 0 auto;
-    width: 600px;
-    background: lightcyan;
-    border-radius: 0 0 10px 10px;
+    width: 800px;
 }
 
 dd {
@@ -58,7 +50,7 @@ input[type=text],input[type=password] {
 .banner-contents {
     padding: 0 16px;
     margin: auto;
-    width: 600px;
+    width: 800px;
 }
 
 .document-link {
@@ -127,4 +119,13 @@ ul.nostyle {
 a.nostyle {
     text-decoration: none;
     color: black;
+}
+
+footer {
+    margin: 0 auto;
+    width: 800px;
+    padding: 8px;
+    background: lightcyan;
+    border-radius: 10px 10px 0 0;
+    text-align: center;
 }

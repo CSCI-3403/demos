@@ -6,11 +6,11 @@
 <h1>New Document</h1>
 
 <form action="/create" method="POST" id="editor">
-    {% if csrf_enabled %}
+    {% if not csrf_enabled %}
     {{ form.csrf_token }}
     {% endif %}
-    <dt><h2>{{ form.content.label }}</h2></dt>
-    <dd>{{ form.content }}
+    <h2>{{ form.content.label }}</h2>
+    {{ form.content }}
     {% if form.content.errors %}
         <ul class="errors">
             {% for error in form.content.errors %}
@@ -18,7 +18,6 @@
             {% endfor %}
         </ul>
     {% endif %}
-    </dd>
     {% if form.errors['csrf_token'] %}
         <ul class="errors">
             {% for error in form.errors['csrf_token'] %}
