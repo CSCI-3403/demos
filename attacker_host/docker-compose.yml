@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  student_host:
+    build: .
+    hostname: attacker
+    environment:
+      - USERS=student:CSCI-3403!
+    ports:
+      - "22:22"

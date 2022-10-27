@@ -1,0 +1,24 @@
+FROM phusion/baseimage:jammy-1.0.1
+
+# Generic useful tools
+RUN apt update
+RUN export DEBIAN_FRONTEND=noninteractive
+
+# General commands which would be expected on a typical server
+RUN apt install -y sudo
+RUN apt install -y python3
+RUN apt install -y python3-pip
+RUN apt install -y vim
+RUN apt install -y emacs
+RUN apt install -y curl
+RUN apt install -y fortune
+RUN apt install -y cowsay
+RUN apt install -y sl
+
+ADD ./init /etc/my_init.d
+
+# RUN rm -f /etc/service/sshd/down
+
+# RUN /etc/my_init.d/00_regen_ssh_host_keys.sh
+
+CMD ["/sbin/my_init"]
