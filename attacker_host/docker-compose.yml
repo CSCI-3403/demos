@@ -8,3 +8,4 @@ services:
       - USERS=student:CSCI-3403!
     ports:
       - "22:22"
+      - "3000-3999:3000-3999"
