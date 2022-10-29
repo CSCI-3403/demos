@@ -10,6 +10,7 @@ services:
       - "22:22"
       - "3001-3099:3001-3099"
     volumes:
-      - ./root/etc/ssh:/etc/ssh
-      - ./root/home:/home
-      - ./root/tmp:/tmp
+      - ./fs/etc/ssh:/etc/ssh
+      - ./fs/home:/home
+      - ./fs/root:/root
+      - ./fs/tmp:/tmp
