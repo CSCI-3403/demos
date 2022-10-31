@@ -1,7 +1,8 @@
+from contextlib import closing
 from dataclasses import dataclass
-from glob import escape
 import logging
 import random
+import sqlite3
 import sys
 from typing import Any, Dict, Optional
 import click
@@ -9,7 +10,7 @@ from flask import Flask, make_response, redirect, request, render_template, sess
 
 from flask_wtf import FlaskForm # type: ignore
 from flask_login import current_user, login_required, login_user, LoginManager, logout_user, UserMixin # type: ignore
-from wtforms import StringField, PasswordField
+from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Length # type: ignore
 from wtforms.widgets import TextArea # type: ignore
 from werkzeug.wrappers import Response
@@ -29,7 +30,11 @@ logger.addHandler(handler)
 
 app = Flask(__name__)
 app.config['SESSION_COOKIE_HTTPONLY'] = False
-app.secret_key = "asdfasdfasdfasdfqwerqwer"
+app.config['SESSION_COOKIE_SAMESITE'] = "None"
+app.config['SESSION_COOKIE_SECURE'] = True
+app.secret_key = "zxcvzxcvzxcvzxcvzvcbncvbnfh"
+
+DATABASE = "./data/users.sqlite3"
 
 @dataclass
 class Document:
@@ -41,41 +46,63 @@ documents = [Document(owner='admin', contents='Test document')]
 @dataclass
 class User(UserMixin):
     username: str
-    password: str
 
     def get_id(self) -> str:
         return self.username
 
 class CSRFForm(FlaskForm):
     def __init__(self):
-        self.Meta.csrf = not csrf_enabled()
+        self.Meta.csrf = csrf_level() > 0
         super().__init__()
-
-users = {
-    "admin": User("admin", "Sw0rdf1sh!")
-}
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-def xss_enabled():
+def xss_level() -> bool:
     return session.get("xss", False)
 
-def csrf_enabled():
+def csrf_level() -> bool:
     return session.get("csrf", False)
 
-def sqli_enabled():
+def sqli_level() -> bool:
     return session.get("sqli", False)
 
 def escape_xss(html: str) -> str:
-    if xss_enabled():
-        return html
-    else:
+    if xss_level() >= 2:
         return html.replace("<", "&lt;").replace(">", "&gt;")
+    else:
+        return html
+
+def execute_sql(query: str, *pargs, script: bool = False) -> Any:
+    connection = sqlite3.connect(DATABASE)
+
+    level = sqli_level()
+
+    cur = connection.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS users (username TEXT, pw TEXT)")
+
+    try:
+        if level == 0:
+            q = query.format(*pargs)
+            if not script:
+                logger.info("Running unsafe query: {}".format(q))
+                return cur.execute(q).fetchone()
+            else:
+                logger.info("Running unsafe script: {}".format(q))
+                return cur.executescript(q).fetchone()
+        else:
+            q = query.replace("'{}'", "?")
+            return cur.execute(q, pargs).fetchone()
+    except (sqlite3.Warning, sqlite3.OperationalError) as e:
+        logger.info(e)
+        raise RuntimeError("Error running query: {}".format(q))
+    finally:
+        connection.commit()
+        cur.close()
 
 @login_manager.user_loader
 def load_user(username: str) -> Optional[User]:
-    return users.get(username)
+    return User(username)
 
 @app.before_request
 def set_id():
@@ -85,9 +112,9 @@ def set_id():
 @app.context_processor
 def inject_debug_info() -> Dict[str, Any]:
     return {
-        'xss_enabled': xss_enabled(),
-        'csrf_enabled': csrf_enabled(),
-        'sqli_enabled': sqli_enabled(),
+        'xss_level': xss_level(),
+        'csrf_level': csrf_level(),
+        'sqli_level': sqli_level(),
     }
 
 @app.route('/')
@@ -100,9 +127,9 @@ def index():
 def search():
     query = request.args.get('query')
     results = [d for d in enumerate(documents) if query.lower() in d[1].contents.lower()]
-    resp = make_response(render_template('search.html',  user=current_user, query=query, documents=results))
+    resp = make_response(render_template('search.html',  user=current_user, query=escape_xss(query), documents=results))
 
-    if not xss_enabled():
+    if xss_level() >= 1:
         resp.headers["Content-Security-Policy"] = "script-src 'self' kit.fontawesome.com"
 
     return resp
@@ -123,57 +150,67 @@ def create():
     if form.validate_on_submit():
         documents.append(Document(owner=current_user.username, contents=form.content.data))
         return redirect(url_for('index'))
-
     return render_template('create.html', user=current_user, form=form)
-
-def add_user(username, password):
-    users[username] = User(username, password)
-
-def get_user(username, password):
-    if username in users:
-        return users[username]
-    else:
-        return None
 
 class LoginForm(CSRFForm):
     username = StringField('Username', [Length(min=1)])
-    password = PasswordField('Password', [Length(min=1)])
+    password = PasswordField('Password')
+    login = SubmitField(label='Log In')
+    create = SubmitField(label='Create')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login() -> Response:
     form = LoginForm()
 
     if form.validate_on_submit():
-        user = get_user(form.username.data, form.password.data)
+        create = form.create.data
+        username = form.username.data
+        password = form.password.data
 
-        if not user:
-            user = User(form.username.data, form.password.data)
-            users[form.username.data] = user
-        elif user.password != form.password.data:
-            form.password.errors.append('Username or password is incorrect!')
-            return render_template('login.html', form=form)
+        try:
+            if create:
+                count, *_ = execute_sql(
+                    "SELECT COUNT(*) FROM users WHERE username='{}'",
+                    username)
 
-        login_user(user)
+                if count == 0:
+                    logger.info("Creating new user: {}".format(username))
+                    execute_sql("INSERT INTO users (username, pw) VALUES ('{}', '{}')", username, password)
+                    login_user(User(username=username))
+                else:
+                    logger.info("Failed creation attempt for user: {}".format(username))
+                    form.username.errors.append("A user with the name {} already exists".format(username))
+                    return render_template('login.html', form=form)
+            else:
+                u = execute_sql(
+                    "SELECT username FROM users WHERE username='{}' AND pw='{}'",
+                    username,
+                    password)
 
-        next = request.args.get('next')
-        if next and request.host in next:
-            return redirect(next)
-        return redirect(url_for('index'))
+                if u is not None:
+                    logger.info("Successful login attempt for user: {}".format(username))
+                    username, *_ = u
+                    login_user(User(username))
+                else:
+                    logger.info("Failed login attempt for user: {}".format(username))
+                    form.password.errors.append('Password is incorrect, or that user does not exist')
+                    return render_template('login.html', form=form)
+
+            next = request.args.get('next')
+            if next and request.host in next:
+                return redirect(next)
+            return redirect(url_for('index'))
+
+        except RuntimeError as e:
+            logger.info("SQL injection error: {}".format(str(e)))
+            form.username.errors.append(str(e))
 
     return render_template('login.html', form=form)
 
 @app.route('/vulns', methods=['POST'])
 def csrf() -> Response:
-    print("Vulns called")
-    print(request.form)
     for vuln in ["xss", "csrf", "sqli"]:
-        print(vuln)
-        if vuln in request.form:
-            print("Enabled" + vuln)
-            session[vuln] = True
-        elif vuln in session:
-            print("Disabled" + vuln)
-            del session[vuln]
+        session[vuln] = int(request.form.get(vuln, 0))
 
     if request.host in request.referrer:
         return redirect(request.referrer)

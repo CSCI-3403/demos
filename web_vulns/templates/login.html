@@ -5,7 +5,7 @@
 {% block content %}
 
 <form action="/login" method="POST" id="editor">
-    {% if not csrf_enabled %}
+    {% if csrf_level > 0 %}
     {{ form.csrf_token }}
     {% endif %}
     <h1>{{ form.username.label }}</h1>
@@ -26,6 +26,13 @@
             {% endfor %}
         </ul>
     {% endif %}
+    <br/>
+    <button type="submit" name="login" form="editor" value="Log in">
+        <i class="fas fa-user"></i> Log in
+    </button>
+    <button type="submit" name="create" form="editor" value="Create">
+        <i class="fas fa-user-plus"></i> Create
+    </button>
     {% if form.errors['csrf_token'] %}
         <ul class="errors">
             {% for error in form.errors['csrf_token'] %}
@@ -34,8 +41,4 @@
         </ul>
     {% endif %}
 </form>
-
-<button type="submit" form="editor" value="Save">
-    <i class="fas fa-user-plus"></i> Log in
-</button>
 {% endblock %}

@@ -6,7 +6,7 @@
 <h1>New Document</h1>
 
 <form action="/create" method="POST" id="editor">
-    {% if not csrf_enabled %}
+    {% if csrf_level > 0 %}
     {{ form.csrf_token }}
     {% endif %}
     <h2>{{ form.content.label }}</h2>

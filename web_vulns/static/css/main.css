@@ -30,6 +30,7 @@ button,input[type=submit] {
 input[type=text],input[type=password] {
     font-size: 1.5em;
     margin: 16px 0;
+    width: 100%;
 }
 
 .logout-button {
@@ -127,5 +128,4 @@ footer {
     padding: 8px;
     background: lightcyan;
     border-radius: 10px 10px 0 0;
-    text-align: center;
 }

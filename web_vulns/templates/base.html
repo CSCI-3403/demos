@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+    {% block head %}
+    <title>XSS Demo</title>
+    {% endblock %}
+    <script src="https://kit.fontawesome.com/2bd72336da.js" crossorigin="anonymous"></script>
+    <script src="/static/js/vuln_settings.js" crossorigin="anonymous" defer></script>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body class="container vertical">
+    <header class="banner">
+        <div class="banner-contents container align-center">
+            <h1 class="flex-grow">DocuZone</h1>
+            {% block header %}
+            {% if user %}
+            <h2 class="username"><i class="fas fa-user"></i> {{ user.username }}</h2>
+            <a href="logout">
+                <button id="logout"><i class="fas fa-user-slash"></i>Log out</button>
+            </a>
+            {% endif %}
+            {% endblock %}
+        </div>
+    </header>
+    <main class="flex-grow">
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <h3>Vulnerabilities enabled</h3>
+        <form action="/vulns" method="POST">
+            <div>
+                Cross-Site Scripting (XSS)
+                <select name="xss">
+                    <option value="0" {{ "selected" if xss_level == 0 else "" }}>No defense</option>
+                    <option value="1" {{ "selected" if xss_level == 1 else "" }}>CSP only</option>
+                    <option value="2" {{ "selected" if xss_level == 2 else "" }}>CSP and escaping</option>
+                </select>
+            </div>
+            <div>
+                Cross-Site Request Forgery (CSRF)
+                <select name="csrf">
+                    <option value="0" {{ "selected" if csrf_level == 0 else "" }}>No defense</option>
+                    <option value="1" {{ "selected" if csrf_level == 1 else "" }}>CSRF tokens</option>
+                </select>
+            </div>
+            <div>
+                SQL Injection (SQLi)
+                <select name="sqli">
+                    <option value="0" {{ "selected" if sqli_level == 0 else "" }}>No defense</option>
+                    <option value="1" {{ "selected" if sqli_level == 1 else "" }}>Escaping</option>
+                </select>
+            </div>
+        </form>
+    </footer>
+</body>
+</html>
