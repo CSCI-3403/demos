@@ -11,8 +11,8 @@
 <h1>All Documents</h1>
 
 <div class="container horizontal wrap">
-  {% for (i, document) in documents %}
-  <a class="nostyle" href="document/{{i}}">
+  {% for document in documents %}
+  <a class="nostyle" href="document/{{document.id}}">
     <div class="document-link">
       <b>{{ document.owner }}</b><br/>
       <span>{{ document.contents[:30] }}</span>

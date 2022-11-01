@@ -9,7 +9,7 @@ import sys
 from typing import Any, Dict, Optional
 
 import click
-from flask import Flask, make_response, redirect, request, render_template, session, url_for
+from flask import Flask, abort, make_response, redirect, request, render_template, session, url_for
 from flask_wtf import FlaskForm # type: ignore
 from flask_login import current_user, login_required, login_user, LoginManager, logout_user, UserMixin # type: ignore
 from wtforms import StringField, PasswordField, SubmitField
@@ -40,10 +40,9 @@ DATABASE = "./data/users.sqlite3"
 
 @dataclass
 class Document:
+    id: int
     owner: str
     contents: str
-
-documents = [Document(owner='admin', contents='Test document')]
 
 @dataclass
 class User(UserMixin):
@@ -75,25 +74,23 @@ def escape_xss(html: str) -> str:
     else:
         return html
 
-def execute_sql(query: str, *pargs, script: bool = False) -> Any:
+def execute_sql(query: str, *pargs, safe: bool = False, script: bool = False) -> Any:
     connection = sqlite3.connect(DATABASE)
-
-    level = sqli_level()
-
     cur = connection.cursor()
 
+    level = sqli_level()
     try:
-        if level == 0:
+        if level == 0 and not safe:
             q = query.format(*pargs)
             if not script:
                 logger.info("Running unsafe query: {}".format(q))
-                return cur.execute(q).fetchone()
+                return cur.execute(q).fetchall()
             else:
                 logger.info("Running unsafe script: {}".format(q))
-                return cur.executescript(q).fetchone()
+                return cur.executescript(q).fetchall()
         else:
             q = query.replace("'{}'", "?")
-            return cur.execute(q, pargs).fetchone()
+            return cur.execute(q, pargs).fetchall()
     except (sqlite3.Warning, sqlite3.OperationalError) as e:
         logger.info(e)
         raise RuntimeError("Error running query: {}".format(q))
@@ -105,11 +102,13 @@ def init():
     connection = sqlite3.connect(DATABASE)
     cur = connection.cursor()
     cur.executescript("""
-    CREATE TABLE IF NOT EXISTS users (username TEXT, password TEXT);
-    CREATE TABLE IF NOT EXISTS creditcards (ccnumber INTEGER, code INTEGER, user TEXT);
+    CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT);
+    CREATE TABLE IF NOT EXISTS documents (id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT, contents TEXT);
+    CREATE TABLE IF NOT EXISTS creditcards (ccnumber INTEGER PRIMARY KEY, code INTEGER, user TEXT);
 
-    INSERT INTO users VALUES ('admin', 'Sw0rdf1sh!');
-    INSERT INTO creditcards VALUES (123456789012, 123, 'admin');
+    INSERT INTO users VALUES ('admin', 'Sw0rdf1sh!') ON CONFLICT DO NOTHING;
+    INSERT INTO documents (id, owner, contents) VALUES (0, 'admin', 'Example document') ON CONFLICT DO NOTHING;
+    INSERT INTO creditcards VALUES (123456789012, 123, 'admin') ON CONFLICT DO NOTHING;
     """)
     connection.commit()
     cur.close()
@@ -134,14 +133,18 @@ def inject_debug_info() -> Dict[str, Any]:
 @app.route('/')
 @login_required
 def index():
-    return render_template('index.html',  user=current_user, documents=enumerate(documents))
+    documents = [Document(d[0], d[1], d[2]) for d in
+        execute_sql("SELECT * FROM documents")]
+    return render_template('index.html',  user=current_user, documents=documents)
 
 @app.route('/search')
 @login_required
 def search():
     query = request.args.get('query')
-    results = [d for d in enumerate(documents) if query.lower() in d[1].contents.lower()]
-    resp = make_response(render_template('search.html',  user=current_user, query=escape_xss(query), documents=results))
+    documents = [Document(d[0], d[1], d[2]) for d in
+        execute_sql("SELECT * FROM documents WHERE contents LIKE ?", f'%{query}%', safe=True)]
+    # results = [d for d in enumerate(documents) if query.lower() in d[1].contents.lower()]
+    resp = make_response(render_template('search.html',  user=current_user, query=escape_xss(query), documents=documents))
 
     if xss_level() >= 1:
         resp.headers["Content-Security-Policy"] = "script-src 'self' kit.fontawesome.com"
@@ -151,7 +154,12 @@ def search():
 @app.route('/document/<id>')
 @login_required
 def document(id):
-    return render_template('document.html', user=current_user, document=escape_xss(documents[int(id)]))
+    documents = [Document(d[0], d[1], d[2]) for d in
+        execute_sql("SELECT * FROM documents WHERE id={}", id, safe=True)]
+
+    if not documents:
+        abort(404)
+    return render_template('document.html', user=current_user, document=escape_xss(documents[0]))
 
 class CreateForm(CSRFForm):
     content = StringField('Content', widget=TextArea(), validators=[DataRequired(), Length(max=2048)])
@@ -162,7 +170,7 @@ def create():
     form = CreateForm()
 
     if form.validate_on_submit():
-        documents.append(Document(owner=current_user.username, contents=form.content.data))
+        execute_sql("INSERT INTO documents (owner, contents) VALUES (?, ?)", current_user.username, form.content.data, safe=True)
         return redirect(url_for('index'))
     return render_template('create.html', user=current_user, form=form)
 
@@ -183,27 +191,27 @@ def login() -> Response:
 
         try:
             if create:
-                count, *_ = execute_sql(
+                (count, *_), *_ = execute_sql(
                     "SELECT COUNT(*) FROM users WHERE username='{}'",
                     username)
 
                 if count == 0:
                     logger.info("Creating new user: {}".format(username))
-                    execute_sql("INSERT INTO users (username, pw) VALUES ('{}', '{}')", username, password, script=True)
+                    execute_sql("INSERT INTO users (username, password) VALUES ('{}', '{}')", username, password, script=True)
                     login_user(User(username=username))
                 else:
                     logger.info("Failed creation attempt for user: {}".format(username))
                     form.username.errors.append("A user with the name {} already exists".format(username))
                     return render_template('login.html', form=form)
             else:
-                u = execute_sql(
-                    "SELECT username FROM users WHERE username='{}' AND pw='{}'",
+                users = execute_sql(
+                    "SELECT username FROM users WHERE username='{}' AND password='{}'",
                     username,
                     password)
 
-                if u is not None:
+                if users:
                     logger.info("Successful login attempt for user: {}".format(username))
-                    username, *_ = u
+                    (username, *_), *_ = users
                     login_user(User(username))
                 else:
                     logger.info("Failed login attempt for user: {}".format(username))
@@ -253,6 +261,7 @@ def reset() -> None:
 @click.option('--debug', is_flag=True)
 @click.option('--port', default=80)
 def main(debug: bool, port: int) -> None:
+    init()
     app.run("0.0.0.0", debug=debug, port=port)
 
 if __name__ == '__main__':
