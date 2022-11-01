@@ -1,13 +1,15 @@
 from contextlib import closing
 from dataclasses import dataclass
+from datetime import datetime
 import logging
+from pathlib import Path
 import random
 import sqlite3
 import sys
 from typing import Any, Dict, Optional
+
 import click
 from flask import Flask, make_response, redirect, request, render_template, session, url_for
-
 from flask_wtf import FlaskForm # type: ignore
 from flask_login import current_user, login_required, login_user, LoginManager, logout_user, UserMixin # type: ignore
 from wtforms import StringField, PasswordField, SubmitField
@@ -79,7 +81,6 @@ def execute_sql(query: str, *pargs, script: bool = False) -> Any:
     level = sqli_level()
 
     cur = connection.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS users (username TEXT, pw TEXT)")
 
     try:
         if level == 0:
@@ -99,6 +100,21 @@ def execute_sql(query: str, *pargs, script: bool = False) -> Any:
     finally:
         connection.commit()
         cur.close()
+
+def init():
+    connection = sqlite3.connect(DATABASE)
+    cur = connection.cursor()
+    cur.executescript("""
+    CREATE TABLE IF NOT EXISTS users (username TEXT, password TEXT);
+    CREATE TABLE IF NOT EXISTS documents (author TEXT, content TEXT);
+    CREATE TABLE IF NOT EXISTS creditcards (ccnumber INTEGER, code INTEGER, user TEXT);
+
+    INSERT INTO users VALUES ('admin', 'Sw0rdf1sh!');
+    INSERT INTO documents VALUES ('admin', 'Example document');
+    INSERT INTO creditcards VALUES (123456789012, 123, 'admin');
+    """)
+    connection.commit()
+    cur.close()
 
 @login_manager.user_loader
 def load_user(username: str) -> Optional[User]:
@@ -175,7 +191,7 @@ def login() -> Response:
 
                 if count == 0:
                     logger.info("Creating new user: {}".format(username))
-                    execute_sql("INSERT INTO users (username, pw) VALUES ('{}', '{}')", username, password)
+                    execute_sql("INSERT INTO users (username, pw) VALUES ('{}', '{}')", username, password, script=True)
                     login_user(User(username=username))
                 else:
                     logger.info("Failed creation attempt for user: {}".format(username))
@@ -230,11 +246,16 @@ def safe() -> Response:
         f.write(json.dumps([d.__dict__ for d in documents]))
     return redirect(url_for('index'))
 
+@app.route('/reset')
+def reset() -> None:
+    Path(DATABASE).rename(f"./data/{datetime.now().strftime('%y-%m-%dT%H-%M-%S')}-users.sqlite3.bak")
+    init()
+
 @click.command()
 @click.option('--debug', is_flag=True)
 @click.option('--port', default=80)
 def main(debug: bool, port: int) -> None:
-    app.run(debug=debug, port=port)
+    app.run("0.0.0.0", debug=debug, port=port)
 
 if __name__ == '__main__':
     main()

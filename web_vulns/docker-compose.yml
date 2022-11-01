@@ -2,8 +2,10 @@ version: '3.8'
 
 services:
   app:
-    build: app
+    build: .
     ports:
       - "6001:80"
     init: true
     restart: always
+    volumes:
+      - ./data:/app/data
