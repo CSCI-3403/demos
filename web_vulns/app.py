@@ -106,11 +106,9 @@ def init():
     cur = connection.cursor()
     cur.executescript("""
     CREATE TABLE IF NOT EXISTS users (username TEXT, password TEXT);
-    CREATE TABLE IF NOT EXISTS documents (author TEXT, content TEXT);
     CREATE TABLE IF NOT EXISTS creditcards (ccnumber INTEGER, code INTEGER, user TEXT);
 
     INSERT INTO users VALUES ('admin', 'Sw0rdf1sh!');
-    INSERT INTO documents VALUES ('admin', 'Example document');
     INSERT INTO creditcards VALUES (123456789012, 123, 'admin');
     """)
     connection.commit()
