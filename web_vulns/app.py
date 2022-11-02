@@ -155,7 +155,7 @@ def search():
 @login_required
 def document(id):
     documents = [Document(d[0], d[1], d[2]) for d in
-        execute_sql("SELECT * FROM documents WHERE id={}", id, safe=True)]
+        execute_sql("SELECT * FROM documents WHERE id=?", id, safe=True)]
 
     if not documents:
         abort(404)
