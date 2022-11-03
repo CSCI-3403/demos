@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    init: true
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "1234:22"
+    volumes:
+      - ./www:/www
+      # - ./conf/httpd.conf:/opt/lampp/apache2/conf/httpd.conf
+  
+  # nginx:
+  #   image: nginx:stable-alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./conf/site.conf:/etc/nginx/conf.d/default.conf
